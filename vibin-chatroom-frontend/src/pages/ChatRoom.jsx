@@ -4,13 +4,12 @@ import { io } from "socket.io-client";
 
 const socket = io("http://localhost:5000");
 
-// Enhanced room themes with better visual hierarchy
 const roomThemes = {
   music: {
     emoji: "🎵",
     name: "Music Lovers",
     gradient: "from-purple-600 to-pink-600",
-    bg: "bg-gradient-to-br from-purple-900/30 to-pink-900/20",
+    bg: "bg-gradient-to-br from-purple-900/90 to-pink-900/90",
     text: "text-white",
     messageGradient: "from-purple-500 to-pink-500",
     border: "border-purple-400/20"
@@ -19,7 +18,7 @@ const roomThemes = {
     emoji: "🎬",
     name: "Movie Buffs",
     gradient: "from-red-600 to-amber-600",
-    bg: "bg-gradient-to-br from-red-900/30 to-amber-900/20",
+    bg: "bg-gradient-to-br from-red-900/90 to-amber-900/90",
     text: "text-white",
     messageGradient: "from-red-500 to-amber-500",
     border: "border-red-400/20"
@@ -28,7 +27,7 @@ const roomThemes = {
     emoji: "📺",
     name: "TV Show Fanatics",
     gradient: "from-blue-600 to-cyan-600",
-    bg: "bg-gradient-to-br from-blue-900/30 to-cyan-900/20",
+    bg: "bg-gradient-to-br from-blue-900/90 to-cyan-900/90",
     text: "text-white",
     messageGradient: "from-blue-500 to-cyan-500",
     border: "border-blue-400/20"
@@ -37,7 +36,7 @@ const roomThemes = {
     emoji: "📚",
     name: "Book Worms",
     gradient: "from-amber-600 to-orange-600",
-    bg: "bg-gradient-to-br from-amber-900/30 to-orange-900/20",
+    bg: "bg-gradient-to-br from-green-900/90 to-red-900/90",
     text: "text-white",
     messageGradient: "from-amber-500 to-orange-500",
     border: "border-amber-400/20"
@@ -46,7 +45,7 @@ const roomThemes = {
     emoji: "🎮",
     name: "Gamers",
     gradient: "from-green-600 to-emerald-600",
-    bg: "bg-gradient-to-br from-green-900/30 to-emerald-900/20",
+    bg: "bg-gradient-to-br from-green-900/90 to-emerald-900/90",
     text: "text-white",
     messageGradient: "from-green-500 to-emerald-500",
     border: "border-green-400/20"
@@ -55,7 +54,7 @@ const roomThemes = {
     emoji: "💄",
     name: "Beauty Enthusiasts",
     gradient: "from-rose-600 to-fuchsia-600",
-    bg: "bg-gradient-to-br from-rose-900/30 to-fuchsia-900/20",
+    bg: "bg-gradient-to-br from-rose-900/90 to-fuchsia-900/90",
     text: "text-white",
     messageGradient: "from-rose-500 to-fuchsia-500",
     border: "border-rose-400/20"
@@ -66,29 +65,50 @@ export default function ChatRoom() {
   const { roomName } = useParams();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
-  const [usersOnline, setUsersOnline] = useState([]); // Now stores array of users
+  const [usersOnline, setUsersOnline] = useState([]);
+  const [editingNickname, setEditingNickname] = useState(false);
+  const [nickname, setNickname] = useState(localStorage.getItem('vibinNickname') || '');
   const messagesEndRef = useRef(null);
-  const theme = roomThemes[roomName] || roomThemes.music;
 
-  // Auto-scroll to bottom when new messages arrive
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Debugging room name
+  console.log("Current room from URL:", roomName);
+  
+  // Strict theme selection with error handling
+  const theme = roomThemes[roomName?.toLowerCase()];
+  if (!theme) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        Invalid room: {roomName}. Please select a valid room.
+      </div>
+    );
+  }
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   useEffect(() => {
+    console.log("Joining room:", roomName);
+    
+    // Set up nickname from localStorage
+    const savedNickname = localStorage.getItem('vibinNickname');
+    if (savedNickname) {
+      setNickname(savedNickname);
+      socket.emit("set_username", savedNickname);
+    }
+
     // Join room and set up event listeners
-    socket.emit("join_room", roomName);
+    socket.emit("join_room", roomName.toLowerCase()); // Ensure consistent casing
 
     socket.on("previous_messages", (msgs) => {
+      console.log("Received previous messages:", msgs.length);
       setMessages(msgs);
     });
 
     socket.on("receive_message", (msg) => {
-      setMessages((prev) => [...prev, msg]);
+      if (msg.room === roomName.toLowerCase()) { // Filter messages by room
+        setMessages((prev) => [...prev, msg]);
+      }
     });
 
     socket.on("users_in_room", (users) => {
@@ -100,28 +120,34 @@ export default function ChatRoom() {
     });
 
     socket.on("user_left", (userId) => {
-      setUsersOnline(prev => prev.filter(id => id !== userId));
+      setUsersOnline(prev => prev.filter(u => u.id !== userId));
     });
 
     return () => {
+      console.log("Leaving room:", roomName);
       socket.off("previous_messages");
       socket.off("receive_message");
       socket.off("users_in_room");
       socket.off("user_joined");
       socket.off("user_left");
-      socket.emit("leave_room", roomName);
+      socket.emit("leave_room", roomName.toLowerCase());
     };
   }, [roomName]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const sendMessage = () => {
     if (input.trim()) {
       const msg = {
-        room: roomName,
+        room: roomName.toLowerCase(), // Consistent room naming
         text: input,
         sender: socket.id,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        username: localStorage.getItem('username') || `User-${socket.id.slice(0, 4)}`
+        username: nickname || `User-${socket.id.slice(0, 4)}`
       };
+      console.log("Sending message to room:", msg.room);
       socket.emit("send_message", msg);
       setInput("");
     }
@@ -134,8 +160,53 @@ export default function ChatRoom() {
     }
   };
 
+  const handleNicknameUpdate = (e) => {
+    e.preventDefault();
+    if (nickname.trim()) {
+      localStorage.setItem('vibinNickname', nickname);
+      socket.emit("set_username", nickname);
+      setEditingNickname(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col items-center p-4 ${theme.bg}`}>
+      {/* Nickname Edit Modal (unchanged) */}
+      {editingNickname && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-gradient-to-br from-purple-900 to-pink-800 p-6 rounded-2xl max-w-md w-full mx-4 border border-white/20 backdrop-blur-sm">
+            <h2 className="text-2xl font-bold text-white mb-4">Edit Your Nickname</h2>
+            <form onSubmit={handleNicknameUpdate}>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="w-full bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500 mb-4"
+                placeholder="Enter your nickname"
+                maxLength="20"
+                required
+                autoFocus
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingNickname(false)}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all"
+                >
+                  Update
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header with room info */}
       <div className={`w-full max-w-4xl ${theme.gradient} rounded-t-2xl p-4 shadow-lg relative`}>
         <div className="flex justify-between items-center">
@@ -150,35 +221,17 @@ export default function ChatRoom() {
             </div>
           </div>
           
-          {/* Online users popover */}
-          <div className="group relative">
-            <button className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded-full text-white text-sm hover:bg-black/30 transition">
-              <span>Who's here</span>
+          {nickname && (
+            <button 
+              onClick={() => setEditingNickname(true)}
+              className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded-full text-white text-sm hover:bg-black/30 transition"
+            >
+              <span>Hi, {nickname}</span>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
-            
-            <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-xl z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-              <div className="p-3">
-                <h3 className="text-xs font-semibold text-gray-400 mb-2">ACTIVE NOW</h3>
-                {usersOnline.length > 0 ? (
-                  <div className="space-y-2">
-                    {usersOnline.map((user, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        <span className="text-sm text-white truncate">
-                          {typeof user === 'object' ? user.username : `User-${user.slice(0, 4)}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400">No active users</p>
-                )}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

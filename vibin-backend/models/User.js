@@ -1,4 +1,3 @@
-// models/User.js
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
@@ -20,7 +19,6 @@ const userSchema = new mongoose.Schema({
   username: {
     type: String,
     default: function() {
-      // Default username based on auth0Id if not provided
       return `User-${this.auth0Id.slice(0, 4)}`;
     }
   },
@@ -42,26 +40,48 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Update the updatedAt field before saving
+// Indexes
+userSchema.index({ auth0Id: 1 }, { unique: true });
+userSchema.index({ email: 1 });
+
+// Pre-save hook
 userSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
 
-// Static method to find or create user
+// Static methods
 userSchema.statics.findOrCreate = async function(auth0Id, userData) {
-  let user = await this.findOne({ auth0Id });
-  if (!user) {
-    user = new this({
-      auth0Id,
-      email: userData.email,
-      name: userData.name,
-      picture: userData.picture,
-      // Other fields can be added here
-    });
-    await user.save();
+  return this.findOneAndUpdate(
+    { auth0Id },
+    {
+      $setOnInsert: {
+        auth0Id,
+        email: userData.email,
+        name: userData.name,
+        picture: userData.picture,
+        rooms: []
+      },
+      $set: {
+        lastActive: Date.now(),
+        updatedAt: Date.now()
+      }
+    },
+    { upsert: true, new: true }
+  );
+};
+
+// Instance methods
+userSchema.methods.addRoom = function(room) {
+  if (!this.rooms.includes(room)) {
+    this.rooms.push(room);
   }
-  return user;
+  return this.save();
+};
+
+userSchema.methods.removeRoom = function(room) {
+  this.rooms = this.rooms.filter(r => r !== room);
+  return this.save();
 };
 
 module.exports = mongoose.model('User', userSchema);

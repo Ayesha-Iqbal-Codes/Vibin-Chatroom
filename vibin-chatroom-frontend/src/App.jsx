@@ -16,7 +16,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/rooms" element={<PrivateRoute><RoomSelection /></PrivateRoute>} />
-        <Route path="/chat/:roomName" element={<PrivateRoute><ChatRoom /></PrivateRoute>} />
+        <Route path="/rooms/:roomName" element={<PrivateRoute><ChatRoom /></PrivateRoute>} />
       </Routes>
     </Router>
   );
