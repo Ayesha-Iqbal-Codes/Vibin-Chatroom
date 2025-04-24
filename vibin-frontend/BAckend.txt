@@ -1,0 +1,39 @@
+const express = require("express");
+const http = require("http");
+const socketIo = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "http://localhost:5173", // Replace with your frontend URL
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+let messages = []; // Store messages in memory for now
+
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  // Send previous messages to the newly connected client
+  socket.emit("previous_messages", messages);
+
+  // Listen for incoming messages and broadcast to all clients
+  socket.on("send_message", (message) => {
+    console.log("Received message:", message);
+    const newMessage = { text: message, sender: socket.id };
+    messages.push(newMessage); // Add to in-memory messages array
+    io.emit("receive_message", newMessage); // Broadcast to all clients
+  });
+
+  // Handle user disconnect
+  socket.on("disconnect", () => {
+    console.log("A user disconnected:", socket.id);
+  });
+});
+
+server.listen(5000, () => {
+  console.log("Server is running on port 5000");
+});
